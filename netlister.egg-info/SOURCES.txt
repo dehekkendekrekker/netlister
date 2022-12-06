@@ -1,0 +1,9 @@
+README.md
+setup.py
+netlister/__init__.py
+netlister.egg-info/PKG-INFO
+netlister.egg-info/SOURCES.txt
+netlister.egg-info/dependency_links.txt
+netlister.egg-info/entry_points.txt
+netlister.egg-info/requires.txt
+netlister.egg-info/top_level.txt

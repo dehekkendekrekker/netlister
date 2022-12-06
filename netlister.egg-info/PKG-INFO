@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: netlister
+Version: 0.0.1
+Summary: Turns yosys output into KiCad6 netlist
+Home-page: https://github.com/dehekkendekrekker/netlister.git
+Author: dehekkendekrekker
+Author-email: donotdisturb@nowhere.else
+License: MIT
+Platform: UNKNOWN
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+UNKNOWN
+

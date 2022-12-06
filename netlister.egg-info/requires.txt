@@ -1,0 +1,4 @@
+colored
+loguru
+prettytable
+skidl
