@@ -118,22 +118,22 @@ class ChipSet(RegistryMixin):
         self.__validate()
 
 
-    def module(self,module_name):
+    def data_for(self,module_name):
         if module_name not in self.chipset["mapping"]:
             abort("No mapping for %s in self.chipset file" % module_name)
 
-        device_name = self.chipset["mapping"][module_name]
+        device_type = self.chipset["mapping"][module_name]
 
-        if device_name not in self.chipset["devices"]:
-            abort("%s not in devices in self.chipset file" % device_name)
+        if device_type not in self.chipset["devices"]:
+            abort("%s not in devices in self.chipset file" % device_type)
 
-        device_properties = self.chipset["devices"][device_name]
+        return {
+            "type": device_type,
+            "properties": self.chipset["devices"][device_type]
+        }
 
-        device = Device(self.registry,device_name, device_properties)
 
-        module = Module(module_name, device)
-
-        return module
+      
 
         
 
