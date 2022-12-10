@@ -12,11 +12,6 @@ class NetList(RegistryMixin):
     def __init__(self, registry: Registry) -> None:
         super().__init__(registry)
 
-        # self.VCC = skidl.Net('VCC')
-        # self.VCC.drive = skidl.POWER
-        # self.GND = skidl.Net('GND')
-        # self.GND.drive = skidl.POWER
-
     def create(self):
         logger.info("Creating netlist")
         self.__create_power_gnd()
@@ -24,7 +19,7 @@ class NetList(RegistryMixin):
         self.__show_paths()
         self.__create_nets()
 
-        self.__show_debug_infos()
+        # self.__show_debug_infos()
         
         
         # self[0]=self.GND  # Not sure about this
@@ -85,13 +80,6 @@ class NetList(RegistryMixin):
     def __create_nets(self):
         for device in self.modules.devices():
             device.create_nets()
-
-        # self.modules.devices()[1].create_nets()
-        # print(self.modules[0].debug_info())
-        # print(self.modules[1].debug_info())
-
-
-
 
 
     

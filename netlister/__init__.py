@@ -35,7 +35,4 @@ def run():
     
 
     registry.netlist.create()
-    quit()
-    # registry.netlist.display()
-    # registry.cell_parser.parse_cells()
     registry.netlist.build(args.output)

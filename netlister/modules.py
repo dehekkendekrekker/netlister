@@ -84,7 +84,7 @@ class Module(ModuleAbstract):
         self.__update_net_list(self.internal_nets_lut, net_nr, net)
         
 
-    def __get_net(self, label, position):
+    def __get_net(self, label, position) -> Net:
         return self.net_list[label][position]
 
     def __has_net(self, label, position):
@@ -109,7 +109,10 @@ class Module(ModuleAbstract):
         if self.__has_net(port, position) and self.__get_net(port, position) != net:
             # In this case, the system tries to update a port position with net,
             # but one already exists. This means that these nets should be merged.
-            logger.warning("Net {} at position {}:{} should be merged with {}", self.__get_net(port, position), port, position, net)
+            logger.warning("Merging net {} at position {}:{} with {}", self.__get_net(port, position), port, position, net)
+            self.__get_net(port, position).connect(net)
+            return
+            
 
         self.__set_net(port, position, net)
             
@@ -156,7 +159,6 @@ class Device(ModuleAbstract):
         for label, nets in self.parent.connections.items():
             for idx, value in enumerate(nets):
                 self.net_list[label][idx] = Net()
-        print(self.net_list)
 
     def __connect_signal_pins(self):
         for label, nets in self.net_list.items():

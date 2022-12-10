@@ -54,8 +54,6 @@ class Cell(HasParent):
         
 
     def __update_parent_nets(self):
-        
-        logger.error(self.parent.type)
         for label, nets in self.connections.items():
             for idx, net_nr in enumerate(nets):
                 if idx not in self.module.net_list[label]:
