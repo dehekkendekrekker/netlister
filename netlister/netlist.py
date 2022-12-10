@@ -6,23 +6,95 @@ from loguru import logger
 from prettytable import PrettyTable
 import json
 
-class NetList(RegistryMixin, dict):
+from netlister.traits import HasParent
+
+class NetList(RegistryMixin):
     def __init__(self, registry: Registry) -> None:
         super().__init__(registry)
 
-        self.VCC = skidl.Net('VCC')
-        self.VCC.drive = skidl.POWER
-        self.GND = skidl.Net('GND')
-        self.GND.drive = skidl.POWER
+        # self.VCC = skidl.Net('VCC')
+        # self.VCC.drive = skidl.POWER
+        # self.GND = skidl.Net('GND')
+        # self.GND.drive = skidl.POWER
 
     def create(self):
         logger.info("Creating netlist")
-        self[0]=self.GND  # Not sure about this
-        self[1]=self.VCC  # Not about this either
-        for name, net in self.input_data.top['netnames'].items():
-            for net_nr in net['bits']:
-                if not net_nr in self:
-                    self[net_nr] = skidl.Net(net_nr)
+        self.__create_power_gnd()
+        self.__enum_devices()
+        self.__show_paths()
+        self.__create_nets()
+
+        self.__show_debug_infos()
+        
+        
+        # self[0]=self.GND  # Not sure about this
+        # self[1]=self.VCC  # Not about this either
+        # for name, net in self.input_data.top['netnames'].items():
+        #     for net_nr in net['bits']:
+        #         if not net_nr in self:
+        #             self[net_nr] = skidl.Net(net_nr)
+
+    def __create_power_gnd(self):
+        vcc = Net("VCC")
+        vcc.drive = skidl.POWER
+        gnd = Net("GND")
+        gnd.drive = skidl.POWER
+
+
+
+    def __enum_devices(self):
+        for device in self.modules.devices():
+            logger.info("{}", device)
+
+    def __show_paths(self):
+        print("=== Paths from device to top module ===")
+        for device in self.modules.devices():
+            self.__show_path(device)
+
+    def __show_path(self, device):
+        path_elements = []
+        parent: HasParent
+        parent = device
+        while parent is not None:
+            path_elements.append(str(parent))
+            parent = parent.get_parent()
+
+        output = "->".join(path_elements)
+        print(output)
+
+
+    def __show_debug_infos(self, idx = None):
+        print("=== DEBUG INFO ===")
+        if idx is not None:
+            self.__show_debug_info(self.modules.devices()[idx])
+        else:
+            for device in self.modules.devices():
+                self.__show_debug_info(device)
+
+    def __show_debug_info(self, device):
+        path_elements = []
+        parent: HasParent
+        parent = device
+        while parent is not None:
+            path_elements.append(str(parent.debug_info()))
+            parent = parent.get_parent()
+
+        output = "\n============\n".join(path_elements)
+        print(output)
+
+    def __create_nets(self):
+        for device in self.modules.devices():
+            device.create_nets()
+
+        # self.modules.devices()[1].create_nets()
+        # print(self.modules[0].debug_info())
+        # print(self.modules[1].debug_info())
+
+
+
+
+
+    
 
     def build(self, root):
         skidl.ERC()
@@ -32,6 +104,7 @@ class NetList(RegistryMixin, dict):
 
     def display(self):
         t = PrettyTable()
+        t.align("l")
         t.title = "NETLIST"
         t.align ="l"
         t.field_names = ['nr', 'name']

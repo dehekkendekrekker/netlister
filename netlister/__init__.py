@@ -4,8 +4,7 @@ from netlister.input_data import InputData
 from netlister.chipset import ChipSet
 from netlister.netlist import NetList
 from netlister.cells import CellParser, CellFactory
-from netlister.modules import ModuleFactory, ModuleParser
-from netlister.devices import DeviceList, DeviceFactory, DeviceParser
+from netlister.modules import ModuleFactory, ModuleParser, DeviceParser, ModuleList
 import os
 
 def run():
@@ -17,7 +16,7 @@ def run():
 
 
     registry = Registry()
-    registry.add("input_data", DeviceList())
+    registry.add("modules", ModuleList())
     registry.add("input_data", InputData(registry))
     registry.add("module_parser", ModuleParser(registry))
     registry.add("chipset", ChipSet(registry))
@@ -26,21 +25,17 @@ def run():
     registry.add("cell_factory", CellFactory(registry))
     registry.add("module_factory", ModuleFactory(registry))
     registry.add("device_parser", DeviceParser(registry))
-    registry.add("device_factory", DeviceFactory(registry))
+
+
     
-
-
 
     registry.input_data.load(args.input)
     registry.chipset.load(args.chipset)
     registry.module_parser.start()
     
 
-    quit()
-    
-    
-    
     registry.netlist.create()
-    registry.netlist.display()
-    registry.cell_parser.parse_cells()
+    quit()
+    # registry.netlist.display()
+    # registry.cell_parser.parse_cells()
     registry.netlist.build(args.output)
