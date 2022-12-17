@@ -8,10 +8,11 @@ from netlister.traits import HasParent
 
 class CellFactory(RegistryMixin):
     def create(self, cells_data):
+        print(cells_data)
         cells = []
-        for name, cell_data in cells_data.items():
-            data = self.cell_parser.parse(cell_data)
-            cells.append(self.__create(name, data))
+        for cell_template in cells_data:
+            data = self.cell_parser.parse(cell_template)
+            cells.append(self.__create(cell_template.label, data))
 
         return cells
 
@@ -20,6 +21,8 @@ class CellFactory(RegistryMixin):
             cell = CDevice()
         else:
             cell = CModule()
+
+        logger.warning("{}", cell)
 
         cell.type = data["type"]
         cell.name = name
@@ -76,15 +79,27 @@ class CDevice(Cell):
 class CellParser(RegistryMixin):
     cell_factory : CellFactory
 
-    def parse(self, cell_data):
+    def parse(self, cell_template):
         return {
-            "is_device": self.__is_physical_cell(cell_data['attributes']),
-            "type": cell_data['type'],
-            "connections": cell_data['connections']
+            "is_device": self.__is_physical_cell(cell_template),
+            "type": cell_template.type,
+            "connections": cell_template.connections
         }
 
-    def __is_physical_cell(self, attributes):
-        return "module_not_derived" not in attributes or bool(attributes['module_not_derived']) is not True
+    # The cell is considered physcial if it is not marked as 'module_not_derived' or if it is marked as blackbox
+    def __is_physical_cell(self, cell_template):
+        if not self.input_data.has_module(cell_template.type):
+            logger.warning("Module {} not found in input data. Treating as device", cell_template.type)
+            return True
+
+        module_template = self.input_data.get_module_for_type(cell_template.type)
+        
+        if module_template.is_blackbox():
+            return True
+        
+
+        return False
+
 
         
 

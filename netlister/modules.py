@@ -4,6 +4,7 @@ import netlister.cells as cells
 from netlister.functions import abort
 from netlister.registry import RegistryMixin
 from netlister.traits import HasParent
+from netlister.input_data import ModuleTemplate
 from loguru import logger
 from prettytable import PrettyTable
 import re
@@ -109,7 +110,7 @@ class Module(ModuleAbstract):
         if self.__has_net(port, position) and self.__get_net(port, position) != net:
             # In this case, the system tries to update a port position with net,
             # but one already exists. This means that these nets should be merged.
-            logger.warning("Merging net {} at position {}:{} with {}", self.__get_net(port, position), port, position, net)
+            logger.info("Merging net {} at position {}:{} with {}", self.__get_net(port, position), port, position, net)
             self.__get_net(port, position).connect(net)
             return
             
@@ -137,6 +138,7 @@ class Module(ModuleAbstract):
 class Device(ModuleAbstract):
     pins: dict
     part: skidl.Part
+    kicad_library: str
     footprint : str
 
     def set_pins(self, pins : list):
@@ -153,7 +155,7 @@ class Device(ModuleAbstract):
 
     def __create_part(self):
         logger.info("Creating part {}:{}", self.type, self.footprint)
-        self.part = skidl.Part('74xx', self.type, footprint=self.footprint, tool_version="kicad_v6")
+        self.part = skidl.Part(self.kicad_library, self.type, footprint=self.footprint, tool_version="kicad_v6")
 
     def __create_signal_nets(self):
         for label, nets in self.parent.connections.items():
@@ -218,23 +220,24 @@ class ModuleFactory(RegistryMixin):
     device_parser : "DeviceParser"
     devices : "DeviceList"
 
-    def create(self, type, parent):
-        return self.__create_module(type, parent)
+    def create(self, template):
+        return self.__create_module(template)
 
     def create_from_cell(self, parent_cell : "cells.Cell"):
+        
         if isinstance(parent_cell, cells.CDevice):
             module = self.__create_device(parent_cell)
         if isinstance(parent_cell, cells.CModule):
-            module = self.__create_module(parent_cell.type, parent_cell)
+            module = self.__create_module(parent_cell)
 
         module.set_parent(parent_cell)
         self.modules.add(module)
         return module
 
-    def __create_module(self, type, parent_cell : "cells.Cell"):
+    def __create_module(self, parent_cell : "cells.Cell"):
+        module_template = self.input_data.get_module_for_type(parent_cell.type)
         module = Module()
-        module.type = type
-        self.module_parser.hydrate(module, parent_cell)
+        self.module_parser.hydrate(module, module_template)
         return module
 
     def __create_device(self, cell : "cells.Cell"):
@@ -248,33 +251,33 @@ class ModuleFactory(RegistryMixin):
 class ModuleParser(RegistryMixin):
     module_factory : ModuleFactory
     def start(self):
-        type = self.input_data.get_top_module_type()
-        self.module_factory.create(type, None)
+        top_module_template = self.input_data.get_top_module()
+        self.module_factory.create(top_module_template)
         
-    def hydrate(self, module : Module, parent: "cells.Cell"):
-        data = self.input_data.get_module_for_type(module.type)
-
-        self.__parse_port(module, data['ports'])
-        self.__parse_internal_nets(module, data['netnames'])
-        cells = self.registry.cell_factory.create(data['cells'])
-        module.add_cells(cells)
-
+    def hydrate(self, module_inst : Module, template : ModuleTemplate):
+        module_inst.type = template.type
+        self.__parse_port(module_inst, template.ports)
+        self.__parse_internal_nets(module_inst, template.netnames)
+        cells = self.registry.cell_factory.create(template.cells)
+        module_inst.add_cells(cells)
 
 
 
-    def __parse_port(self, module :Module, port_data):
-        for label, data in port_data.items():
-            module.add_port(label, data['bits'])
 
-    def __parse_internal_nets(self, module, net_data):
-        for label, data in net_data.items():
-            module.add_port(label, data['bits'])
+    def __parse_port(self, module :Module, ports):
+        for port in ports:
+            module.add_port(port.label, port.bits)
+
+    def __parse_internal_nets(self, module :Module, net_names):
+        for net_name in net_names:
+            module.add_port(net_name, net_name['bits'])
 
 
 class DeviceParser(RegistryMixin):
     def hydrate(self, device  : Device, cell : "cells.Cell"):
         data = self.chipset.data_for(cell.type)
         device.type = data['type']
+        device.kicad_library = data['properties']['kicad_library']
         device.set_pins(data['properties']['pins'])
         
         self.__parse_ports(device, cell)

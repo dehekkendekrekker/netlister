@@ -117,7 +117,6 @@ class ChipSet(RegistryMixin):
 
         self.__validate()
 
-
     def data_for(self,module_name):
         if module_name not in self.chipset["mapping"]:
             abort("No mapping for %s in self.chipset file" % module_name)
