@@ -20,7 +20,7 @@ class InputData(RegistryMixin):
         logger.error("Could not find top module. Maybe add 'hierarchy -top <modulname>' to your yosys script.")
         quit()
 
-    def get_module_for_type(self, type):
+    def get_module_for_type(self, type) -> "ModuleTemplate":
         if type not in self.modules:
             logger.error("Could not find module {} in input data", type)
             quit()
@@ -44,75 +44,63 @@ class InputData(RegistryMixin):
 
             module.set_attributes(information['attributes'])
 
-            logger.warning("{}", module.attributes)
-
-
             for label, portinfo in information['ports'].items():
-                port = Port(label)
-                port.set_direction(portinfo['direction'])
-                port.set_bits(portinfo['bits'])
-
-                module.add_port(port)
+                module.add_port(label, portinfo['bits'])
 
             for label, cellinfo in information['cells'].items():
                 cell = CellTemplate(label)
-                cell.set_type(cellinfo['type'])
-                cell.set_attributes(cellinfo['attributes'])
+                cell.type = cellinfo['type']
+                cell.attributes = cellinfo['attributes']
                 if 'port_directions' in cellinfo:
-                    cell.set_port_directions(cellinfo['port_directions'])
-                cell.set_connections(cellinfo['connections'])
-
+                    cell.port_directions = cellinfo['port_directions']
+                cell.connections = cellinfo['connections']
+                self.__determine__is_device(cell)
                 module.add_cell(cell)
 
             for label, netnameinfo in information['netnames'].items():
-                netname = NetName(label)
-                netname.set_bits(netnameinfo['bits'])
+                netname = NetName(label, netnameinfo['bits'])
 
             self.modules[type] = module
 
+    def __determine__is_device(self, cell_template : "CellTemplate"):
+        if not self.has_module(cell_template.type):
+            logger.warning("Module {} not found in input data. Treating as device", cell_template.type)
+            cell_template.is_device = True
+            return
+
+        module_template = self.get_module_for_type(cell_template.type)
+        
+        if module_template.is_blackbox():
+            cell_template.is_device = True
+            return
+        
+        cell_template.is_device = False
+        return
 
 
-
-
-
-
-class Port:
-    def __init__(self, label) -> None:
-        self.label = label
-
-    def set_direction(self, direction):
-        self.direction = direction
-
-    def set_bits(self, bits):
-        self.bits = bits
 
 class CellTemplate:
+    attributes : dict
+    port_directions : dict
+    attributes : dict
+    is_device : bool
+
     def __init__(self, label) -> None:
         self.label = label
 
         self.attributes = {}
         self.port_directions = {}
         self.attributes = {}
+        self.is_device = None
 
-    def set_type(self, type):
-        self.type = type
 
-    def set_attributes(self, attributes):
-        self.attributes = attributes
-
-    def set_port_directions(self, port_directions):
-        self.port_directions = port_directions
-
-    def set_connections(self, connections):
-        self.connections = connections
 
 class NetName:
-    def __init__(self, label) -> None:
+    def __init__(self, label, bits) -> None:
         self.label = label
-
-    def set_bits(self, bits):
         self.bits = bits
-        
+
+       
     
         
 
@@ -120,7 +108,7 @@ class NetName:
 class ModuleTemplate:
     def __init__(self, type) -> None:
         self.type = type
-        self.ports = []
+        self.ports = {}
         self.cells = []
         self.netnames = []
         self.attributes = {}
@@ -141,8 +129,8 @@ class ModuleTemplate:
 
         return False
 
-    def add_port(self, port):
-        self.ports.append(port)
+    def add_port(self, label, bits):
+        self.ports[label] = bits
 
     def add_cell(self, cell):
         self.cells.append(cell)

@@ -10,4 +10,3 @@ class HasParent:
 
     def get_parent(self):
         return self.parent
-    

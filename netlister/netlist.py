@@ -5,6 +5,7 @@ import skidl
 from loguru import logger
 from prettytable import PrettyTable
 import json
+from netlister.modules import Device
 
 from netlister.traits import HasParent
 
@@ -78,6 +79,7 @@ class NetList(RegistryMixin):
         print(output)
 
     def __create_nets(self):
+        device : Device
         for device in self.modules.devices():
             device.create_nets()
 

@@ -4,34 +4,39 @@ import netlister.cells as cells
 from netlister.functions import abort
 from netlister.registry import RegistryMixin
 from netlister.traits import HasParent
+from netlister.input_data import InputData
 from netlister.input_data import ModuleTemplate
+
 from loguru import logger
 from prettytable import PrettyTable
 import re
 
 class ModuleAbstract(HasParent):
     type : str
-    ports: dict
+    _ports: dict
     net_list : dict
 
-    def __init__(self) -> None:
+    def __init__(self,type) -> None:
         super().__init__()
-        self.ports = {}
-        self.ports_nets_lut = {}
+        self.type = type
+        self._ports = {}
+        self._ports_nets_lut = {}
         self.net_list = {}
-
-    def add_port(self, label, net_nrs):
-        self.ports[label] = net_nrs
-        if label not in self.net_list:
-            self.net_list[label] = {}
-        self.__update_ports__nets_lut()
+        
         
 
+    def set_ports(self, ports):
+        bits : dict
+        for label, bits in ports.items():
+            self._ports[label] = bits.copy()
+            self.net_list[label] = {}
+        self.__update_internal_nets_lut()
+
     # Updates the lookup table to find the port:position of a netnr
-    def __update_ports__nets_lut(self):
-        for port, net_nrs in self.ports.items():
+    def __update_internal_nets_lut(self):
+        for port, net_nrs in self._ports.items():
             for idx, net_nr in enumerate(net_nrs):
-                self.ports_nets_lut[net_nr] = (port, idx)
+                self._ports_nets_lut[net_nr] = (port, idx)
 
 
     
@@ -42,7 +47,7 @@ class ModuleAbstract(HasParent):
         t.align='l'
         t.add_row(["parent", "%s->%s" % (self.get_parent(), self.get_parent().parent.type if self.get_parent() else None)])
         t.add_row(["type", self.type])
-        t.add_row(["ports", "\n".join(["%s: %s" % (key, value) for key, value in self.ports.items()])])
+        t.add_row(["ports", "\n".join(["%s: %s" % (key, value) for key, value in self._ports.items()])])
         t.add_row(["net list", "============================"])
         self.__debug_info_net_list(t)
 
@@ -63,26 +68,25 @@ class Module(ModuleAbstract):
     cells : list
     internal_nets : dict
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, type) -> None:
+        super().__init__(type)
         self.cells = []
         self.internal_nets = {}
-        self.internal_nets_lut = {}
+        self.__internal_nets_lut = {}
 
-    def add_internal_net(self, label, net_nrs):
-        self.internal_nets[label] = net_nrs
-        if label not in self.net_list :
-            self.net_list[label] = {}
-        self.__update_ports__nets_lut()
+    def set_internal_nets(self, nets):
+        for net in nets:
+            self.internal_nets[net.label] = net.bits
+        self.__update_internal_nets_lut()
 
-    def __update_ports__nets_lut(self):
+    def __update_internal_nets_lut(self):
         for port, net_nrs in self.internal_nets.items():
             for idx, net_nr in enumerate(net_nrs):
-                self.internal_nets_lut[net_nr] = (port, idx)
+                self.__internal_nets_lut[net_nr] = (port, idx)
 
     def update_ports_and_internal_nets(self, net_nr, net):
-        self.__update_net_list(self.ports_nets_lut, net_nr, net)
-        self.__update_net_list(self.internal_nets_lut, net_nr, net)
+        self.__update_net_list(self._ports_nets_lut, net_nr, net)
+        self.__update_net_list(self.__internal_nets_lut, net_nr, net)
         
 
     def __get_net(self, label, position) -> Net:
@@ -141,9 +145,8 @@ class Device(ModuleAbstract):
     kicad_library: str
     footprint : str
 
-    def set_pins(self, pins : list):
-        self.pins = pins
-        self.footprint = "Package_DIP:DIP-%s_W7.62mm" % len(self.pins)
+    def __init__(self, type) -> None:
+        super().__init__(type)
 
     def create_nets(self):
         self.__create_part()
@@ -166,7 +169,7 @@ class Device(ModuleAbstract):
         for label, nets in self.net_list.items():
             for idx, net in nets.items():
                 net: Net
-                pin_nr = self.ports[label][idx]
+                pin_nr = self._ports[label][idx]
                 logger.info("Connecting {}:{} to net {}", self.part.name, pin_nr, net)
                 net.connect(self.part[pin_nr])
 
@@ -174,12 +177,12 @@ class Device(ModuleAbstract):
         vcc = Net.fetch("VCC")
         gnd = Net.fetch("GND")
 
-        for idx, pin_nr in self.ports["VCC"].items():
+        for idx, pin_nr in self._ports["VCC"].items():
             logger.info("Connecting {}:{} to VCC", self.part.name, pin_nr, vcc)
             vcc.connect(self.part[pin_nr])
             self.net_list["VCC"][idx] = vcc
 
-        for idx, pin_nr in self.ports["GND"].items():
+        for idx, pin_nr in self._ports["GND"].items():
             logger.info("Connecting {}:{} to GND", self.part.name, pin_nr, gnd)
             gnd.connect(self.part[pin_nr])
             self.net_list["GND"][idx] = gnd
@@ -216,13 +219,13 @@ class Device(ModuleAbstract):
 
 
 class ModuleFactory(RegistryMixin):
-    module_parser : "ModuleParser"
-    device_parser : "DeviceParser"
-    devices : "DeviceList"
+    cell_factory : "CellFactory"
+    input_data : "InputData"
 
-    def create(self, template):
-        return self.__create_module(template)
-
+    def start(self):
+        top_module_template = self.input_data.get_top_module()
+        return self.__create_module(top_module_template)
+    
     def create_from_cell(self, parent_cell : "cells.Cell"):
         
         if isinstance(parent_cell, cells.CDevice):
@@ -236,76 +239,20 @@ class ModuleFactory(RegistryMixin):
 
     def __create_module(self, parent_cell : "cells.Cell"):
         module_template = self.input_data.get_module_for_type(parent_cell.type)
-        module = Module()
-        self.module_parser.hydrate(module, module_template)
+        module = Module(parent_cell.type)
+        module.set_ports(module_template.ports)
+        module.set_internal_nets(module_template.netnames)
+        cells = self.cell_factory.create(module_template.cells)
+        module.add_cells(cells)
         return module
 
-    def __create_device(self, cell : "cells.Cell"):
-        device = Device()
-        self.device_parser.hydrate(device, cell)
+    def __create_device(self, parent_cell : "cells.Cell"):
+        device_template = self.chipset.get_device_template_for_module(parent_cell.type)
+        device = Device(device_template.type)
+        device.kicad_library = device_template.kicad_library
+        device.footprint = device_template.footprint
+        device.set_ports(device_template.ports)
         return device
-
-
-
-
-class ModuleParser(RegistryMixin):
-    module_factory : ModuleFactory
-    def start(self):
-        top_module_template = self.input_data.get_top_module()
-        self.module_factory.create(top_module_template)
-        
-    def hydrate(self, module_inst : Module, template : ModuleTemplate):
-        module_inst.type = template.type
-        self.__parse_port(module_inst, template.ports)
-        self.__parse_internal_nets(module_inst, template.netnames)
-        cells = self.registry.cell_factory.create(template.cells)
-        module_inst.add_cells(cells)
-
-
-
-
-    def __parse_port(self, module :Module, ports):
-        for port in ports:
-            module.add_port(port.label, port.bits)
-
-    def __parse_internal_nets(self, module :Module, net_names):
-        for net_name in net_names:
-            module.add_port(net_name, net_name['bits'])
-
-
-class DeviceParser(RegistryMixin):
-    def hydrate(self, device  : Device, cell : "cells.Cell"):
-        data = self.chipset.data_for(cell.type)
-        device.type = data['type']
-        device.kicad_library = data['properties']['kicad_library']
-        device.set_pins(data['properties']['pins'])
-        
-        self.__parse_ports(device, cell)
-        
-    def __parse_ports(self, device  : Device, cell : "cells.Cell"):
-        ports = {}
-        for pinnr, label in device.pins.items():
-            pinnr = int(pinnr)
-            # See if we're dealing with a bus-pin
-            match = re.findall("(.*)\[(\d*)\]", label)
-            if match:
-                label, idx = match[0]
-                idx = int(idx)
-                if label not in ports:
-                    ports[label] = {}
-                ports[label][idx] = pinnr
-            else:
-                # Not dealing with a bus pin
-                if label not in ports:
-                    ports[label] = {}
-                ports[label][0] = pinnr
-
-        # Turn dict into list, and assign
-        for label, pins in ports.items():
-            device.add_port(label, pins)
-
-        # print(device.ports)
-        # quit()
 
 class ModuleList(list):
     def __init__(self):
