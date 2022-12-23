@@ -1,3 +1,5 @@
+from skidl import *
+import skidl
 from netlister.functions import abort
 import netlister.modules as modules
 from netlister.registry import RegistryMixin
@@ -57,13 +59,47 @@ class Cell(HasParent):
         
 
     def __update_parent_nets(self):
+        # loop through the label:{idx:net_nr} mapping
+        # ex: "A": [ 12, 13, 14, 11, 15, 16, 17, 10, "0", "0", "0", "0", "0", "0", "0" ],
         for label, nets in self.connections.items():
+            # Loop throug the {idx_netnr} mapping
             for idx, net_nr in enumerate(nets):
+                # If the idx does not exist in the netlist, this means this net is not mapped
+                # and the corresponding pin on the device will be treated as unconnected.
                 if idx not in self.module.net_list[label]:
                     continue
 
+                # Get the corresponding net of the child module. This is of class Net
                 net = self.module.net_list[label][idx]
+
+                if self.__is_logic_level(net_nr):
+                    # The pin on position idx must be connected to logic high
+                    self.__connect_net_to_logic_level(net_nr, net)
+
+                    # The parent need not be updated, since we don't have as valid net_nr
+                    continue
+                   
+
+
+                # This updates the nets of the parent
                 self.parent.update_ports_and_internal_nets(net_nr, net)
+
+    def __is_logic_level(self, input):
+        return isinstance(input, str)
+
+    def __connect_net_to_logic_level(self, net_nr, net : Net):
+        if net_nr == "1":
+            logger.info("Connecting net {} to logic-high", net)
+            vcc = Net.fetch("VCC")
+            net.connect(vcc)
+        elif net_nr == "0":
+            logger.info("Connecting net {} to logic-low", net)
+            gnd = Net.fetch("GND")
+            net.connect(gnd)
+        else:
+            logger.error("Unknown logic level {} for module {}", net_nr, self.type)
+            quit()
+
 
 
 

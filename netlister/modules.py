@@ -39,7 +39,7 @@ class ModuleAbstract(HasParent):
                 self._ports_nets_lut[net_nr] = (port, idx)
 
 
-    
+  
 
 
     def debug_info(self):
@@ -75,8 +75,9 @@ class Module(ModuleAbstract):
         self.__internal_nets_lut = {}
 
     def set_internal_nets(self, nets):
-        for net in nets:
-            self.internal_nets[net.label] = net.bits
+        for label, bits in nets.items():
+            self.internal_nets[label] = bits
+            self.net_list[label] = {}
         self.__update_internal_nets_lut()
 
     def __update_internal_nets_lut(self):
@@ -99,7 +100,7 @@ class Module(ModuleAbstract):
         self.net_list[port][position] = net
 
 
-    def __update_net_list(self, lut, net_nr,net):
+    def __update_net_list(self, lut, net_nr, net):
         if not net_nr in lut:
             # The net number should exist in the internal nets
             return
@@ -149,12 +150,26 @@ class Device(ModuleAbstract):
         super().__init__(type)
 
     def create_nets(self):
+        self.__sanity_check()
         self.__create_part()
         self.__create_signal_nets()
         self.__connect_signal_pins()
         self.__connect_power_pins()
         self.__handle_unconnected_pins()
         self.__connect_parent()
+
+    def __sanity_check(self):
+        for label, nets in self.parent.connections.items():
+            if label not in self._ports:
+                logger.error("Pin label {} of device {} not found in chipset file. Update chipset to match yosys .json", label, self.type)
+                quit()
+
+            conn_map_len = len(nets)
+            nr_pins = len(self._ports[label])
+
+            if conn_map_len > nr_pins:
+                logger.error("Device {} has more connections ({}) mapped to it then there are pins ({}) for net {}. Check verilog module / chipset", self.type, conn_map_len, nr_pins, label)
+                quit()
 
     def __create_part(self):
         logger.info("Creating part {}:{}", self.type, self.footprint)
@@ -167,7 +182,7 @@ class Device(ModuleAbstract):
 
     def __connect_signal_pins(self):
         for label, nets in self.net_list.items():
-            for idx, net in nets.items():
+            for idx, net in nets.items(): 
                 net: Net
                 pin_nr = self._ports[label][idx]
                 logger.info("Connecting {}:{} to net {}", self.part.name, pin_nr, net)
@@ -189,8 +204,11 @@ class Device(ModuleAbstract):
             
 
     def __handle_unconnected_pins(self):
+        pin : Pin
         for pin in self.part.get_pins():
             if not pin.is_connected():
+                if pin.name == "NC":
+                    continue
                 if pin.func == Pin.types.INPUT:
                     logger.warning("Pin {}:{} is not connected, connecting to GND", self.part.name, pin)
                     pin += Net.fetch("GND")

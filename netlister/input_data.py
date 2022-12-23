@@ -39,6 +39,7 @@ class InputData(RegistryMixin):
 
 
     def __parse(self, data):
+        # The first pass parses the module specific information(without the cells)
         for type, information in data['modules'].items():
             module = ModuleTemplate(type)
 
@@ -47,7 +48,14 @@ class InputData(RegistryMixin):
             for label, portinfo in information['ports'].items():
                 module.add_port(label, portinfo['bits'])
 
-            for label, cellinfo in information['cells'].items():
+            for label, netnameinfo in information['netnames'].items():
+                module.add_netname(label, netnameinfo['bits'])
+
+            self.modules[type] = module
+
+        module : ModuleTemplate
+        for type, module in self.modules.items():            
+            for label, cellinfo in data['modules'][type]['cells'].items():
                 cell = CellTemplate(label)
                 cell.type = cellinfo['type']
                 cell.attributes = cellinfo['attributes']
@@ -57,10 +65,7 @@ class InputData(RegistryMixin):
                 self.__determine__is_device(cell)
                 module.add_cell(cell)
 
-            for label, netnameinfo in information['netnames'].items():
-                netname = NetName(label, netnameinfo['bits'])
-
-            self.modules[type] = module
+            
 
     def __determine__is_device(self, cell_template : "CellTemplate"):
         if not self.has_module(cell_template.type):
@@ -94,12 +99,6 @@ class CellTemplate:
         self.is_device = None
 
 
-
-class NetName:
-    def __init__(self, label, bits) -> None:
-        self.label = label
-        self.bits = bits
-
        
     
         
@@ -110,7 +109,7 @@ class ModuleTemplate:
         self.type = type
         self.ports = {}
         self.cells = []
-        self.netnames = []
+        self.netnames = {}
         self.attributes = {}
 
     def set_attributes(self, attributes):
@@ -135,8 +134,8 @@ class ModuleTemplate:
     def add_cell(self, cell):
         self.cells.append(cell)
 
-    def add_netnames(self, netname):
-        self.netnames.append(netname)
+    def add_netname(self, label, netname):
+        self.netnames[label] = netname
 
 
 

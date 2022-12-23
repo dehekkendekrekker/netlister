@@ -199,7 +199,7 @@ class ChipSet(RegistryMixin):
             pins = device["pins"]
             for label in pins.values():
                 if list(pins.values()).count(label) > 1:
-                    abort("Pin-label %s of device %s occurs more than once" % (label, name))
+                    logger.warning("Pin-label {} of device {} occurs more than once", label, name)
 
 
 
